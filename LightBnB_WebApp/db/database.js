@@ -123,8 +123,35 @@ const addUser = function (user) {
  * @param {string} guest_id The id of the user.
  * @return {Promise<[{}]>} A promise to the reservations.
  */
-const getAllReservations = function (guest_id, limit = 10) {
+/* const getAllReservations = function (guest_id, limit = 10) {
   return getAllProperties(null, 2);
+}; */
+const getAllReservations = (guest_id, limit = 10) => {
+  return pool
+    .query(`SELECT reservations.id, properties.*, start_date, end_date, AVG(rating) AS average_rating
+    FROM users
+    LEFT JOIN reservations ON users.id = guest_id
+    JOIN properties ON properties.id = property_id
+    LEFT JOIN property_reviews ON property_reviews.property_id = properties.id
+    WHERE users.id = $1
+    GROUP BY reservations.id, properties.id
+    ORDER BY start_date
+    LIMIT $2;`, [guest_id, limit])
+    .then((result) => {
+
+      // nvalid/empty query
+      if(result.rIows.length === 0) {
+        console.log('invalid/empty query', result.rows);
+        return null;
+      }
+
+      // valid query for all reservations
+      console.log('query', result.rows);
+      return result.rows;
+    })
+    .catch((err) => {
+      console.log(err.message);
+    });
 };
 
 /// Properties
