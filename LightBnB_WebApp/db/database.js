@@ -154,29 +154,20 @@ const getAllReservations = (guest_id, limit = 10) => {
     });
 };
 
+/// Properties
+
+// /**
+//  * Get all properties.
+//  * @param {{}} options An object containing query options.
+//  * @param {*} limit The number of results to return.
+//  * @return {Promise<[{}]>}  A promise to the properties.
+//  */
 const getAllProperties = function(options, limit = 10) {
   const queryParams = [];
   let queryString = `
   SELECT properties.*, avg(property_reviews.rating) as average_rating
   FROM properties
-  JOIN property_reviews ON properties.id = property_id
-  `;
-
-  /*
-  options is equal to 
-  {
-  city,
-  owner_id,
-  minimum_price_per_night,
-  maximum_price_per_night,
-  minimum_rating;
-  }
-   */
-
-  // city, owner_id, min price, max price are part of WHERE
-  let firstWhereOption = false;
-  // const { ... } // assigns various variables to object properties
-  // const obj = { ... } // assigns object properties to various variables
+  JOIN property_reviews ON properties.id = property_id`;
   const whereOptions = [
     'city',
     'owner_id',
@@ -211,12 +202,12 @@ const getAllProperties = function(options, limit = 10) {
         whereLine += `${whereColumn} = $${queryParams.length} `;
         break;
       case 'minimum_price_per_night': 
-        queryParams.push(options[whereColumn] / 100);
-        whereLine += `${whereColumn} >= $${queryParams.length} `;
+        queryParams.push(options[whereColumn] * 100);
+        whereLine += `cost_per_night >= $${queryParams.length} `;
         break;
       case 'maximum_price_per_night': 
-        queryParams.push(options[whereColumn] / 100);
-        whereLine += `${whereColumn} <= $${queryParams.length} `;
+        queryParams.push(options[whereColumn] * 100);
+        whereLine += `cost_per_night <= $${queryParams.length} `;
         break;
       default:
         break;
@@ -229,7 +220,7 @@ const getAllProperties = function(options, limit = 10) {
   if (options.minimum_rating) {
     queryParams.push(options.minimum_rating)
     havingLine += `
-    HAVING average_rating >= $${queryParams.length}`;
+    HAVING avg(property_reviews.rating) >= $${queryParams.length}`;
   }
 
   queryParams.push(limit);
@@ -243,36 +234,6 @@ const getAllProperties = function(options, limit = 10) {
 
   return pool.query(queryString, queryParams).then((res) => res.rows);
 };
-
-/// Properties
-
-// /**
-//  * Get all properties.
-//  * @param {{}} options An object containing query options.
-//  * @param {*} limit The number of results to return.
-//  * @return {Promise<[{}]>}  A promise to the properties.
-//  */
-// const getAllProperties = (options, limit = 10) => {
-//   const queryWheres = `
-//   WHERE city LIKE '%ancouv%'
-//   AND owner_id = `;
-//   const queryString = `SELECT properties.* avg(property_reviews.rating) as average_rating
-//   FROM properties
-//   LEFT JOIN property_reviews ON properties.id = property_id${queryWheres}
-//   GROUP BY properties.id
-//   HAVING avg(property_reviews.rating) >= $2
-//   ORDER BY cost_per_night
-//   LIMIT $1;`;
-//   return pool
-//     .query(queryString, [limit])
-//     .then((result) => {
-//       console.log(result.rows);
-//       return result.rows;
-//     })
-//     .catch((err) => {
-//       console.log(err.message);
-//     });
-// };
 
 /**
  * Add a property to the database
