@@ -38,7 +38,7 @@ const getUserWithEmail = (email) => {
     .then((result) => {
 
       // Invalid email
-      if(result.rows.length === 0) {
+      if (result.rows.length === 0) {
         console.log('invalid query', result.rows);
         return null;
       }
@@ -61,7 +61,7 @@ const getUserWithEmail = (email) => {
 /* const getUserWithId = function (id) {
   return Promise.resolve(users[id]);
 }; */
-const getUserWithId = function (id) {
+const getUserWithId = function(id) {
   return pool
     .query(`SELECT *
     FROM users
@@ -69,7 +69,7 @@ const getUserWithId = function (id) {
     .then((result) => {
 
       // Invalid id
-      if(result.rows.length === 0) {
+      if (result.rows.length === 0) {
         console.log('invalid query for id', result.rows);
         return null;
       }
@@ -81,7 +81,7 @@ const getUserWithId = function (id) {
     .catch((err) => {
       console.log(err.message);
     });
-}
+};
 
 /**
  * Add a new user to the database.
@@ -94,15 +94,15 @@ const getUserWithId = function (id) {
   users[userId] = user;
   return Promise.resolve(user);
 }; */
-const addUser = function (user) {
-  
+const addUser = function(user) {
+
   return pool
     .query(`INSERT INTO users (name, email, password)
     VALUES ($1, $2, $3)
     RETURNING *;`, [user.name, user.email, user.password])
     .then((result) => {
       // Invalid insertion
-      if(result.rows.length === 0) {
+      if (result.rows.length === 0) {
         console.log('invalid query for insertion', result.rows);
         return null;
       }
@@ -114,7 +114,7 @@ const addUser = function (user) {
     .catch((err) => {
       console.log(err.message);
     });
-}
+};
 
 /// Reservations
 
@@ -126,7 +126,7 @@ const addUser = function (user) {
 /* const getAllReservations = function (guest_id, limit = 10) {
   return getAllProperties(null, 2);
 }; */
-const getAllReservations = (guest_id, limit = 10) => {
+/* const getAllReservations = (guest_id, limit = 10) => {
   return pool
     .query(`SELECT reservations.id, properties.*, start_date, end_date, AVG(rating) AS average_rating
     FROM users
@@ -139,8 +139,8 @@ const getAllReservations = (guest_id, limit = 10) => {
     LIMIT $2;`, [guest_id, limit])
     .then((result) => {
 
-      // nvalid/empty query
-      if(result.rIows.length === 0) {
+      // invalid/empty query
+      if(result.rows.length === 0) {
         console.log('invalid/empty query', result.rows);
         return null;
       }
@@ -152,6 +152,101 @@ const getAllReservations = (guest_id, limit = 10) => {
     .catch((err) => {
       console.log(err.message);
     });
+}; */
+const getAllProperties = function(options, limit = 10) {
+  // 1
+  const queryParams = [];
+  // 2
+  let queryString = `
+  SELECT properties.*, avg(property_reviews.rating) as average_rating
+  FROM properties
+  JOIN property_reviews ON properties.id = property_id
+  `;
+
+  // 3
+  /*
+  options is equal to 
+  {
+  city,
+  owner_id,
+  minimum_price_per_night,
+  maximum_price_per_night,
+  minimum_rating;
+  }
+   */
+
+  // city, owner_id, min price, max price are part of WHERE
+  let firstWhereOption = false;
+  // const { ... } // assigns various variables to object properties
+  // const obj = { ... } // assigns object properties to various variables
+  const whereOptions = {
+    city: true,
+    owner_id: true,
+    minimum_price_per_night: true,
+    maximum_price_per_night: true,
+  };
+  let firstWhere = true;
+  for (const whereColumn in whereOptions) {    
+    // only make a new 'where' line for options that are present
+    if(!options[whereColumn]) {
+      continue;
+    }
+
+    // beginning of line
+    let whereLine = `
+    `;
+    if (firstWhere) {
+      whereLine += 'WHERE ';
+      firstWhere = false;
+    } else {
+      whereLine += 'AND ';
+    }
+
+    // check specific condition according to the option
+    switch (whereColumn) {
+      case 'city':
+        queryParams.push(`%${options[whereColumn]}%`);
+        whereLine += `${whereColumn} LIKE $${queryParams.length} `;
+        break;
+      case 'owner_id': 
+        queryParams.push(options[whereColumn]);
+        whereLine += `${whereColumn} = $${queryParams.length} `;
+        break;
+      case 'minimum_price_per_night': 
+        queryParams.push(options[whereColumn] / 100);
+        whereLine += `${whereColumn} >= $${queryParams.length} `;
+        break;
+      case 'maximum_price_per_night': 
+        queryParams.push(options[whereColumn] / 100);
+        whereLine += `${whereColumn} <= $${queryParams.length} `;
+        break;
+      default:
+        break;
+    }
+    queryString += whereLine;
+  };
+
+  // 4
+  // one 'having' option so just handle that
+  let havingLine = ``;
+  if (options.minimum_rating) {
+    queryParams.push(options.minimum_rating)
+    havingLine += `
+    HAVING average_rating >= $${queryParams.length}`;
+  }
+
+  queryParams.push(limit);
+  queryString += `
+  GROUP BY properties.id${havingLine}
+  ORDER BY cost_per_night
+  LIMIT $${queryParams.length};
+  `;
+
+  // 5
+  console.log('queryString:', queryString, 'queryParams:', queryParams);
+
+  // 6
+  return pool.query(queryString, queryParams).then((res) => res.rows);
 };
 
 /// Properties
@@ -163,8 +258,18 @@ const getAllReservations = (guest_id, limit = 10) => {
  * @return {Promise<[{}]>}  A promise to the properties.
  */
 const getAllProperties = (options, limit = 10) => {
+  const queryWheres = `
+  WHERE city LIKE '%ancouv%'
+  AND owner_id = `;
+  const queryString = `SELECT properties.* avg(property_reviews.rating) as average_rating
+  FROM properties
+  LEFT JOIN property_reviews ON properties.id = property_id${queryWheres}
+  GROUP BY properties.id
+  HAVING avg(property_reviews.rating) >= $2
+  ORDER BY cost_per_night
+  LIMIT $1;`;
   return pool
-    .query(`SELECT * FROM properties LIMIT $1`, [limit])
+    .query(queryString, [limit])
     .then((result) => {
       console.log(result.rows);
       return result.rows;
@@ -179,7 +284,7 @@ const getAllProperties = (options, limit = 10) => {
  * @param {{}} property An object containing all of the property details.
  * @return {Promise<{}>} A promise to the property.
  */
-const addProperty = function (property) {
+const addProperty = function(property) {
   const propertyId = Object.keys(properties).length + 1;
   property.id = propertyId;
   properties[propertyId] = property;
